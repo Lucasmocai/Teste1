@@ -1,0 +1,174 @@
+-- Pancake Mod Executor Compacto
+
+local P=game.Players.LocalPlayer
+local U=game:GetService("UserInputService")
+local R=game:GetService("RunService")
+local T=game:GetService("TweenService")
+
+-- Draggable
+local function drag(f)
+	local d,i,s,p
+	f.InputBegan:Connect(function(inp)
+		if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+			d=true;s=inp.Position;p=f.Position
+			inp.Changed:Connect(function()
+				if inp.UserInputState==Enum.UserInputState.End then d=false end
+			end)
+		end
+	end)
+	f.InputChanged:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseMovement then i=inp end end)
+	U.InputChanged:Connect(function(inp)
+		if inp==i and d then
+			local delta=inp.Position-s
+			f.Position=UDim2.new(p.X.Scale,p.X.Offset+delta.X,p.Y.Scale,p.Y.Offset+delta.Y)
+		end
+	end)
+end
+
+-- GUI
+local G=Instance.new("ScreenGui",game.CoreGui)
+G.Name="PancakeUtilGui"
+local F=Instance.new("Frame",G)
+F.Size=UDim2.new(0,260,0,260)
+F.Position=UDim2.new(0.5,-130,0.4,-130)
+F.BackgroundColor3=Color3.fromRGB(30,30,30)
+F.Active=true
+drag(F)
+
+local stroke=Instance.new("UIStroke",F)
+stroke.Thickness=3
+stroke.Color=Color3.fromRGB(148,0,211)
+
+local function btn(n,y) local b=Instance.new("TextButton",F) b.Size=UDim2.new(0,120,0,32) b.Position=UDim2.new(0,10,0,y) b.BackgroundColor3=Color3.fromRGB(40,40,40) b.TextColor3=Color3.new(1,1,1) b.Font=Enum.Font.SourceSans b.TextSize=16 b.Text=n..": OFF" return b end
+
+local inf,spd,nc,esp,setPos=btn("Infinity Jump",40),btn("Speed Hack (50)",80),btn("NoClip",120),btn("ESP Highlight",160),btn("Set Pos",200)
+local tpBtn=Instance.new("TextButton",G)
+tpBtn.Size=UDim2.new(0,120,0,32)
+tpBtn.Position=UDim2.new(0.7,0,0,40)
+tpBtn.Text="Tp Enemy: OFF"
+tpBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+tpBtn.TextColor3=Color3.new(1,1,1)
+drag(tpBtn)
+local goPosBtn=Instance.new("TextButton",G)
+goPosBtn.Size=UDim2.new(0,120,0,32)
+goPosBtn.Position=UDim2.new(0.7,0,0,90)
+goPosBtn.Text="Go Pos"
+goPosBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+goPosBtn.TextColor3=Color3.new(1,1,1)
+drag(goPosBtn)
+
+-- Open/Close
+local close=Instance.new("TextButton",F)
+close.Size=UDim2.new(0,28,0,24)
+close.Position=UDim2.new(1,-34,0,6)
+close.Text="X"
+close.BackgroundColor3=Color3.fromRGB(50,50,50)
+close.TextColor3=Color3.new(1,1,1)
+close.Font=Enum.Font.SourceSansBold
+close.TextSize=18
+local open=Instance.new("TextButton",G)
+open.Size=UDim2.new(0,90,0,30)
+open.Position=UDim2.new(0,10,0.5,-15)
+open.Text="pancake"
+open.Font=Enum.Font.SourceSansBold
+open.TextSize=16
+open.BackgroundColor3=Color3.fromRGB(50,50,50)
+open.TextColor3=Color3.new(1,1,1)
+open.Visible=false
+drag(open)
+close.MouseButton1Click:Connect(function() F.Visible=false;open.Visible=true end)
+open.MouseButton1Click:Connect(function() F.Visible=true;open.Visible=false end)
+
+-- States
+local s={inf=false,spd=false,nc=false,esp=false,tp=false}
+local h={}
+local conn={}
+local loopTP
+local savedPos
+
+local function toggle(b,on) if on then b.Text=b.Text:match("^(.-):")..": ON";b.BackgroundColor3=Color3.fromRGB(0,120,0) else b.Text=b.Text:match("^(.-):")..": OFF";b.BackgroundColor3=Color3.fromRGB(40,40,40) end end
+
+-- Infinity Jump
+inf.MouseButton1Click:Connect(function()
+	s.inf=not s.inf
+	toggle(inf,s.inf)
+	if s.inf then conn.inf=U.JumpRequest:Connect(function() local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid") if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end)
+	else if conn.inf then conn.inf:Disconnect() end
+	end
+end)
+
+-- Speed Hack
+spd.MouseButton1Click:Connect(function()
+	s.spd=not s.spd
+	toggle(spd,s.spd)
+	local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid")
+	if h then h.WalkSpeed=s.spd and 50 or 16 end
+end)
+
+-- NoClip
+nc.MouseButton1Click:Connect(function()
+	s.nc=not s.nc
+	toggle(nc,s.nc)
+	if s.nc then
+		conn.nc=R.Stepped:Connect(function()
+			local c=P.Character
+			if c then for _,v in pairs(c:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide=false end end end
+		end)
+	else if conn.nc then conn.nc:Disconnect() end end
+end)
+
+-- ESP
+local function HL(c) local hl=Instance.new("Highlight") hl.Adornee=c hl.FillTransparency=0.7 hl.OutlineTransparency=0 hl.FillColor=Color3.fromRGB(255,0,0) hl.Parent=game.CoreGui return hl end
+esp.MouseButton1Click:Connect(function()
+	s.esp=not s.esp
+	toggle(esp,s.esp)
+	if s.esp then for _,pl in pairs(Players:GetPlayers()) do if pl~=P and pl.Character then h[pl]=HL(pl.Character) end end
+	else for _,hl in pairs(h) do if hl then hl:Destroy() end end h={} end
+end)
+
+-- Set Pos
+setPos.MouseButton1Click:Connect(function()
+	local hrp=P.Character and P.Character:FindFirstChild("HumanoidRootPart")
+	if hrp then savedPos=hrp.CFrame;toggle(setPos,true) end
+end)
+
+-- Go Pos Tween
+goPosBtn.MouseButton1Click:Connect(function()
+	if savedPos then
+		local hrp=P.Character and P.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then T:Create(hrp,TweenInfo.new(1,Enum.EasingStyle.Linear),{CFrame=savedPos}):Play() end
+	end
+end)
+
+-- TP Enemy
+local function nearest()
+	local myHRP=P.Character and P.Character:FindFirstChild("HumanoidRootPart")
+	if not myHRP then return end
+	local c,d=nil,nil
+	for _,pl in pairs(Players:GetPlayers()) do
+		if pl~=P and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+			local dist=(pl.Character.HumanoidRootPart.Position-myHRP.Position).Magnitude
+			if not d or dist<d then c,d=pl,dist end
+		end
+	end
+	return c
+end
+
+tpBtn.MouseButton1Click:Connect(function()
+	s.tp=not s.tp
+	if s.tp then tpBtn.Text="Tp Enemy: ON";tpBtn.BackgroundColor3=Color3.fromRGB(0,120,0)
+	else tpBtn.Text="Tp Enemy: OFF";tpBtn.BackgroundColor3=Color3.fromRGB(40,40,40) end
+	if s.tp then
+		loopTP=R.Heartbeat:Connect(function()
+			local t=nearest()
+			local hrp=P.Character and P.Character:FindFirstChild("HumanoidRootPart")
+			if t and hrp then
+				local tHRP=t.Character:FindFirstChild("HumanoidRootPart")
+				if tHRP then hrp.CFrame=tHRP.CFrame*CFrame.new(0,-1,-3) end
+			end
+		end)
+	else if loopTP then loopTP:Disconnect() loopTP=nil end end
+end)
+
+-- Respawn fix
+P.CharacterAdded:Connect(function(c) wait(0.5) if s.spd then local h=c:FindFirstChildOfClass("Humanoid") if h then pcall(function() h.WalkSpeed=50 end) end end end)
